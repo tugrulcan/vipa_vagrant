@@ -90,6 +90,8 @@ Vagrant.configure("2") do |config|
      
     # Install PostgreSQL and Git
     sudo apt-get install -y postgresql git
+    sudo cp /vagrant/pg_hba.conf /etc/postgresql/9.1/main/pg_hba.conf
+
 
     # Add php7 repo and update
     sudo ppa-purge ppa:ondrej/php-7.0
@@ -133,7 +135,6 @@ Vagrant.configure("2") do |config|
 
     service nginx restart
     service php7.0-fpm restart
-
     # PostgreSQL database and user setup
     su - postgres
     psql -d template1 -U postgres
