@@ -1,77 +1,6 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+VAGRANTFILE_API_VERSION = "2"
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
-Vagrant.configure("2") do |config|
-  # The most common configuration options are documented and commented below.
-  # For a complete reference, please see the online documentation at
-  # https://docs.vagrantup.com.
-
-  # Every Vagrant development environment requires a box. You can search for
-  # boxes at https://atlas.hashicorp.com/search.
-  config.vm.box = "hashicorp/precise64"
-
-  # Disable automatic box update checking. If you disable this, then
-  # boxes will only be checked for updates when the user runs
-  # `vagrant box outdated`. This is not recommended.
-  # config.vm.box_check_update = false
-
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine. In the example below,
-  # accessing "localhost:8080" will access port 80 on the guest machine.
-  # NOTE: This will enable public access to the opened port
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
-
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine and only allow access
-  # via 127.0.0.1 to disable public access
-  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
-
-  # Create a private network, which allows host-only access to the machine
-  # using a specific IP.
-  # config.vm.network "private_network", ip: "192.168.33.10"
-
-  # Create a public network, which generally matched to bridged network.
-  # Bridged networks make the machine appear as another physical device on
-  # your network.
-  # config.vm.network "public_network"
-
-  # Share an additional folder to the guest VM. The first argument is
-  # the path on the host to the actual folder. The second argument is
-  # the path on the guest to mount the folder. And the optional third
-  # argument is a set of non-required options.
-  # config.vm.synced_folder "../data", "/vagrant_data"
-
-  # Provider-specific configuration so you can fine-tune various
-  # backing providers for Vagrant. These expose provider-specific options.
-  # Example for VirtualBox:
-  #
-  config.vm.provider "virtualbox" do |vb|
-    # Display the VirtualBox GUI when booting the machine
-    vb.gui = false
-  
-    # Customize the amount of memory on the VM:
-    vb.memory = "2048"
-  end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
-
-  # Define a Vagrant Push strategy for pushing to Atlas. Other push strategies
-  # such as FTP and Heroku are also available. See the documentation at
-  # https://docs.vagrantup.com/v2/push/atlas.html for more information.
-  # config.push.define "atlas" do |push|
-  #   push.app = "YOUR_ATLAS_USERNAME/YOUR_APPLICATION_NAME"
-  # end
-
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
-  # documentation for more information about their specific syntax and use.
-  config.vm.provision "shell", inline: <<-SHELL
-    
+$script = <<SCRIPT
     # Java
     sudo apt-get update
     sudo apt-get -y --no-install-recommends install apt-utils software-properties-common python-software-properties curl ppa-purge
@@ -90,9 +19,23 @@ Vagrant.configure("2") do |config|
      
     # Install PostgreSQL and Git
     sudo apt-get install -y postgresql git
+    # PostgreSQL database and user setup
+
+    # fix permissions
+    echo "-------------------- fixing listen_addresses on postgresql.conf"
+    sudo sed -i "s/#listen_address.*/listen_addresses '*'/" /etc/postgresql/9.1/main/postgresql.conf
     sudo cp /vagrant/pg_hba.conf /etc/postgresql/9.1/main/pg_hba.conf
-
-
+    sudo service postgresql restart
+    # echo "-------------------- postgres template "
+    sudo su postgres -c "psql --dbname=template1 --username=postgres  --no-password "
+    echo "-------------------- database"
+    sudo su postgres -c "psql --command=\" CREATE DATABASE vipa\" "
+    echo "-------------------- role"
+    sudo su postgres -c "psql --command=\" CREATE USER vipa WITH PASSWORD 'vipa'\" "
+    echo "-------------------- grant"
+    sudo su postgres -c "psql --command=\" GRANT ALL PRIVILEGES ON DATABASE vipa to vipa\" "
+    sudo service postgresql restart
+    
     # Add php7 repo and update
     sudo ppa-purge ppa:ondrej/php-7.0
     sudo add-apt-repository ppa:ondrej/php -y
@@ -135,16 +78,7 @@ Vagrant.configure("2") do |config|
 
     service nginx restart
     service php7.0-fpm restart
-    # PostgreSQL database and user setup
-    su - postgres
-    psql -d template1 -U postgres
 
-    CREATE USER vipa WITH PASSWORD 'vipa';
-    CREATE DATABASE vipa;
-    GRANT ALL PRIVILEGES ON DATABASE vipa to vipa;
-    \q
-
-    su
     cd $OLDPWD
 
     sudo apt-get autoremove
@@ -166,7 +100,7 @@ Vagrant.configure("2") do |config|
     && su -s /bin/bash www-data \
     && cd /var/www \
     && rm -rf html \
-    && git clone https://github.com/tugrulcan/vipa.git \
+    && git clone https://github.com/academic/vipa.git \
     && cd vipa \
     && echo "{}" > ~/.composer/composer.json \
     && cp /vagrant/config.json  /root/.composer/config.json \
@@ -182,11 +116,32 @@ Vagrant.configure("2") do |config|
     sudo mkdir /etc/nginx/sites-available/vipa/ 
     sudo touch /etc/nginx/sites-available/vipa/nginx.conf
     cp /vagrant/nginx.conf /etc/nginx/sites-available/vipa/nginx.conf
+    sudo cp /vagrant/nginx.conf /etc/nginx/conf.d/default.conf
     service nginx restart
 
     sudo su -s /bin/bash www-data \
     && cd /var/www/vipa \
     && app/console vipa:install:package citation
 
-  SHELL
+SCRIPT
+
+
+Vagrant.configure("2") do |config|
+
+  config.vm.box = "hashicorp/precise64"
+  
+  # speed up apt-get
+  config.cache.auto_detect = true
+
+  config.vm.network :forwarded_port, guest: 5432, host: 5432
+  config.vm.network :forwarded_port, guest: 9000, host: 9000
+  config.vm.network :forwarded_port, guest: 80, host: 80
+
+  config.vm.provision "shell", inline: $script
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.gui = false
+    vb.memory = "2048"
+  end
+
 end
