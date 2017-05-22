@@ -26,15 +26,20 @@ $script = <<SCRIPT
     sudo sed -i "s/#listen_address.*/listen_addresses '*'/" /etc/postgresql/9.1/main/postgresql.conf
     sudo cp /vagrant/pg_hba.conf /etc/postgresql/9.1/main/pg_hba.conf
     sudo service postgresql restart
-    # echo "-------------------- postgres template "
-    sudo su postgres -c "psql --dbname=template1 --username=postgres  --no-password "
-    echo "-------------------- database"
-    sudo su postgres -c "psql --command=\" CREATE DATABASE vipa\" "
-    echo "-------------------- role"
-    sudo su postgres -c "psql --command=\" CREATE USER vipa WITH PASSWORD 'vipa'\" "
-    echo "-------------------- grant"
-    sudo su postgres -c "psql --command=\" GRANT ALL PRIVILEGES ON DATABASE vipa to vipa\" "
+
+      echo '===== Creating PostgreSQL databases and users'
+      ### DO NOT CHANGE THE TABS!!!
+su postgres << EOF
+psql -c "CREATE USER vipa WITH PASSWORD 'vipa'"
+EOF
+su postgres << EOF
+psql -c "CREATE DATABASE vipa;"
+EOF
+su postgres << EOF
+psql -c "GRANT ALL PRIVILEGES ON DATABASE vipa to vipa"
+EOF
     sudo service postgresql restart
+
     
     # Add php7 repo and update
     sudo ppa-purge ppa:ondrej/php-7.0
@@ -135,7 +140,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.network :forwarded_port, guest: 5432, host: 5432
   config.vm.network :forwarded_port, guest: 9000, host: 9000
-  config.vm.network :forwarded_port, guest: 80, host: 80
+  config.vm.network :forwarded_port, guest: 80, host: 81
 
   config.vm.provision "shell", inline: $script
 
